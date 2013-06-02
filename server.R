@@ -10,25 +10,30 @@ simpleStatus <- function(mhandle) {
 	ldply(mhandle[[1]]@subhandles,function(x)as.data.frame(nullNa(getCurlInfo(x))))
 }
 
+print.reactivevalues=function(x)print(names(x))
+
+new.fetcher <- function(url) {
+	reactiveValues(
+		complete = FALSE,
+		url = url,
+		buffer = NULL,
+		content = NULL,
+		header = NULL,
+		asyncRequestHandle = NULL,
+		contentDownloaded = 0 # an object containing the actual handle
+	)
+}
+
 shinyServer(function(input, output, session) {
 	
 	murl <- list(
 		multiHandle = getCurlMultiHandle(),
 		multiControl = reactiveValues(
-				complete = TRUE,
+				complete = FALSE, # should probably be 2 to start
 				downloadCount = 0 # just indicates progress
 		),
 		# Should have a fetcher for each URL in flight.
-		fetcher = reactiveValues(
-			complete = FALSE,
-			url = "",
-			buffer = NULL,
-			content = NULL,
-			header = NULL,
-			asyncRequestHandle = NULL,
-			bufferSize=1024*1024,
-			contentDownloaded = 0 # an object containing the actual handle
-		)
+		fetcher = new.fetcher(NULL)
 	)
 	
 	# detect new url requests and dispatch
@@ -36,9 +41,9 @@ shinyServer(function(input, output, session) {
 		# doesn't seem to be asynchronous?
 		url <- isolate(input$url) # listen to action button
 		input$load_url
-		
-		if(is.null(url)||url==""||url == isolate(murl$fetcher$url)) return(NULL)
-		
+		if(is.null(url)||url=="") return(NULL)
+		if(url %in% murl$fetcher$url) return(NULL)
+
 		murl$fetcher$url <- url
 		# suitable for text only :-)
 		# single request (per invocation of newUrlObserver) only
@@ -54,7 +59,7 @@ shinyServer(function(input, output, session) {
 		                     write = writefunction,
 												 file=writedata,
                          multiHandle = murl$multiHandle, 
-                         perform = 0,
+                         perform = FALSE,
  												 headerFunction=headerfunction
 		  )
 
@@ -96,7 +101,7 @@ shinyServer(function(input, output, session) {
 		if(is.null(murl$fetcher$asyncRequestHandle)) return(NULL)
 		summarize(simpleStatus(murl$fetcher$asyncRequestHandle),
 		  url=effective.url,
-		  res=response.code,
+		  res=as.character(response.code),
 		  time=total.time,
 		  percent=size.download/content.length.download
 		)
@@ -104,8 +109,8 @@ shinyServer(function(input, output, session) {
 	
 	output$hists = renderPlot({
 		# just one for now
-		if (TRUE!=murl$multiControl$complete) return(NULL)
-		browser()
+		if (FALSE==murl$multiControl$complete) return(NULL)
+
 		wordlengths<-function(x)ldply(table(attr(gregexpr("[A-Za-z]+",x)[[1]],"match.length")))
     print(qplot(data=wordlengths(murl$fetcher$content),x=as.numeric(as.character(.id)),y=V1,geom="bar",stat="identity"))
 	})
