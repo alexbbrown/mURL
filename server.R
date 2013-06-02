@@ -11,15 +11,34 @@ simpleStatus <- function(mhandle) {
 
 shinyServer(function(input, output, session) {
 	
-	murl <- reactiveValues(
-		url = "",
+	murl <- list(
 		multiHandle = getCurlMultiHandle(),
-		partialcontent = NULL,
-		content = NULL,
-		complete = TRUE,
-		multiRequestHandle = NULL,
-		downloadCount = 0
+		fetcher = reactiveValues(
+			url = "",
+			partialcontent = "",
+			buffer = NULL,
+			content = NULL,
+			complete = TRUE,
+			asyncRequestHandle = NULL,
+			contentDownloaded = 0, # an object containing the actual handle
+			downloadCount = 0 # just indicates progress
+		)
 	)
+	
+	aURLController <- list(
+		# a single multi handle that gets updated each time
+		multiHandle = getCurlMultiHandle(),
+		# a list of data for each url fetcher
+		urls = list(
+			# prototype = list(url, handle, functions, complete)
+			),
+		control = reactiveValues(
+			active=NULL, # ! activecount==0
+			activeCount=NULL  
+			)
+	)
+	
+	
 	
 	# get a new URL and dispatch it
 	newUrlObserver <- observe({
@@ -28,41 +47,50 @@ shinyServer(function(input, output, session) {
 		input$load_url
 		
 		if(is.null(url)||url=="") return(NULL)
-		if (url == isolate(murl$url)) return(NULL)
+		if (url == isolate(murl$fetcher$url)) return(NULL)
 		
-		murl$url <- url
+		murl$fetcher$url <- url
 		# suitable for text only :-)
 		# single request (per invocation of newUrlObserver) only
-		writefn = function(x)1 #function(x) murl$partialcontent <- paste0(murl$partialcontent, x)
+		writefn <- function(x)1 #function(x) murl$partialcontent <- paste0(murl$partialcontent, x)
+		writefn <- function(x)murl$fetcher$partialcontent <- paste0(murl$fetcher$partialcontent, x)
 		
-		murl$multiRequestHandle = 
+		buffer <- binaryBuffer()
+		murl$fetcher$buffer <- buffer
+    writefunction <- getNativeSymbolInfo("R_curl_write_binary_data")$address
+    writedata <- buffer@ref
+		
+		
+		murl$fetcher$asyncRequestHandle = 
 		  getURLAsynchronous(url, 
-		                     write = writefn,
+		                     write = writefunction,
+												 file=writedata,
                          multiHandle = murl$multiHandle, 
                          perform = 0,
  												 header=FALSE)
 
- 		murl$complete <- FALSE
+ 		murl$fetcher$complete <- FALSE
 	})
 	
+	# URLworker is a global object on the 
 	urlWorker <- observe({
-		if (is.null(murl$url)) return(NULL)
-		if (murl$complete == TRUE) return(NULL)
+		if (is.null(murl$fetcher$url)) return(NULL)
+		if (murl$fetcher$complete == TRUE) return(NULL)
 		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
-		murl$multiRequestHandle <<- murl$multiRequestHandle
+		murl$fetcher$asyncRequestHandle <<- murl$fetcher$asyncRequestHandle
 		if(status$numHandlesRemaining > 0) {
 			invalidateLater(1,session)
-			murl$downloadCount <<- isolate(murl$downloadCount)+1
+			murl$fetcher$downloadCount <<- isolate(murl$fetcher$downloadCount)+1
 			
 		} else {
-			murl$complete <<- TRUE
-			murl$downloadCount <<- isolate(murl$downloadCount)+1
+			murl$fetcher$complete <<- TRUE
+			murl$fetcher$downloadCount <<- isolate(murl$fetcher$downloadCount)+1
 		}
 	})
 	
 	output$transferTable = renderTable({
-		murl$downloadCount
-		if(is.null(murl$multiRequestHandle)) return(NULL)
-		simpleStatus(murl$multiRequestHandle)
+		murl$fetcher$downloadCount
+		if(is.null(murl$fetcher$asyncRequestHandle)) return(NULL)
+		simpleStatus(murl$fetcher$asyncRequestHandle)
 	})
 })
