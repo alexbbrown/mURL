@@ -10,6 +10,7 @@ shinyUI(pageWithSidebar(
 		actionButton("load_url", "Load URL")),
 	div("sidebar"),
 	div("body",
-	  tableOutput("transferTable")
+	  tableOutput("transferTable"),
+	  plotOutput("hists",height=200)
 	)
 ))
