@@ -78,11 +78,19 @@ shinyServer(function(input, output, session) {
 		if (murl$fetcher$complete == TRUE) return(NULL)
 		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
 		murl$fetcher$asyncRequestHandle <<- murl$fetcher$asyncRequestHandle
+		
 		if(status$numHandlesRemaining > 0) {
 			invalidateLater(1,session)
 			murl$fetcher$downloadCount <<- isolate(murl$fetcher$downloadCount)+1
 			
 		} else {
+			
+			if (completeness[1]) {
+				completeness <- with(simpleStatus(murl$fetcher$asyncRequestHandle),size.download==content.length.download)
+				# decode content (half-done - needs header)
+				content <- content(httr:::response(url="foo",content=as(murl$fetcher$buffer, "raw")),as="text")
+			} 
+			
 			murl$fetcher$complete <<- TRUE
 			murl$fetcher$downloadCount <<- isolate(murl$fetcher$downloadCount)+1
 		}
