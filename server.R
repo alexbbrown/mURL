@@ -13,12 +13,13 @@ shinyServer(function(input, output, session) {
 	
 	murl <- list(
 		multiHandle = getCurlMultiHandle(),
+		multiControl = reactiveValues(
+				complete = TRUE
+		),
 		fetcher = reactiveValues(
 			url = "",
-			partialcontent = "",
 			buffer = NULL,
 			content = NULL,
-			complete = TRUE,
 			asyncRequestHandle = NULL,
 			contentDownloaded = 0, # an object containing the actual handle
 			downloadCount = 0 # just indicates progress
@@ -37,8 +38,6 @@ shinyServer(function(input, output, session) {
 		murl$fetcher$url <- url
 		# suitable for text only :-)
 		# single request (per invocation of newUrlObserver) only
-		writefn <- function(x)1 #function(x) murl$partialcontent <- paste0(murl$partialcontent, x)
-		writefn <- function(x)murl$fetcher$partialcontent <- paste0(murl$fetcher$partialcontent, x)
 		
 		buffer <- binaryBuffer()
 		murl$fetcher$buffer <- buffer
@@ -54,7 +53,7 @@ shinyServer(function(input, output, session) {
                          perform = 0,
  												 header=FALSE)
 
- 		murl$fetcher$complete <- FALSE
+ 		murl$multiControl$complete <- FALSE
 	})
 	
 	# URLworker is concerned with the continuing fetch work of the multi
@@ -62,7 +61,7 @@ shinyServer(function(input, output, session) {
 	# It currently uses a timer, but could use select in a parallel universe.
 	urlWorker <- observe({
 		if (is.null(murl$fetcher$url)) return(NULL)
-		if (murl$fetcher$complete == TRUE) return(NULL)
+		if (murl$multiControl$complete == TRUE) return(NULL)
 		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
 		murl$fetcher$asyncRequestHandle <<- murl$fetcher$asyncRequestHandle
 		
@@ -79,7 +78,7 @@ shinyServer(function(input, output, session) {
 				content <- content(httr:::response(url="foo",content=as(murl$fetcher$buffer, "raw")),as="text")
 			} 
 			
-			murl$fetcher$complete <<- TRUE
+			murl$multiControl$complete <<- TRUE
 			murl$fetcher$downloadCount <<- isolate(murl$fetcher$downloadCount)+1
 		}
 	})
