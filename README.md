@@ -5,15 +5,17 @@ mURL is an exploration of the use of cURL to enable asynchronous downloads in se
 
 By Alex B Brown
 
-RStudio's shiny can use used to build an interactive front-end to data which is fetched (by the server-side app) from other 'foreign' web-services.  Often this means the server has to download multiple documents from multiple foreign web-servers for multiple users, often in response to user choices.
+RStudio's shiny can use used to build an interactive front-end to data which is fetched (by the server-side app) from other remote web-services.  Often this means the server has to download multiple documents from multiple remote web-servers for multiple users, often in response to user choices.
 
-The foreign web services it depends upon may not always be able to complete the transaction immediately, this can be due to : overloaded resources on the foreign server, available bandwidth in between, deliberate throttling, file-size, overhead of authentication, or in a not infrequent case, simple failure.
+The remote web services it depends upon may not always be able to complete the transaction immediately, this can be due to : overloaded resources on the remote server, available network bandwidth in between, deliberate throttling, file-size, overhead of authentication, or in a not infrequent case, simple failure.
 
 A naive use of the varied HTTP download functionality in R would tend to result in synchronous downloads, which would cause the shiny application to block (stop working) for the current user (and possibly all users) until the content fetch completed (or failed).
 
 ---
 
 Shiny's reactive model points at a solution to this problem - instead of performing a synchronous download, initiate the request (in response to user input) and hand control back to shiny server.  A background function (or other mechanism) can monitor the state of the download.  Once the download is complete, a 'result' resultValue can be invalidated to indicate that an output function can process the downloaded data.
+
+Note that asynchrony in this sense is not multi-threading - control must be explicitly yielded to libcurl and it's R wrapper to enable the download to proceed.  The advantage of asynchrony here derives from the fact that an external process (the remove web service and network) and operating system buffers operate independently of the R process.
 
 ----
 
