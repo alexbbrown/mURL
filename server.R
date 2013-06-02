@@ -39,8 +39,8 @@ shinyServer(function(input, output, session) {
 		  getURLAsynchronous(url, 
 		                     write = writefn,
                          multiHandle = murl$multiHandle, 
-                         perform = FALSE,
- 												 header=TRUE)
+                         perform = 0,
+ 												 header=FALSE)
 
  		murl$complete <- FALSE
 	})
@@ -48,11 +48,10 @@ shinyServer(function(input, output, session) {
 	urlWorker <- observe({
 		if (is.null(murl$url)) return(NULL)
 		if (murl$complete == TRUE) return(NULL)
-		print("!!!URLWORKER\n")
 		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
 		murl$multiRequestHandle <<- murl$multiRequestHandle
 		if(status$numHandlesRemaining > 0) {
-			invalidateLater(1000,session)
+			invalidateLater(1,session)
 			murl$downloadCount <<- isolate(murl$downloadCount)+1
 			
 		} else {
