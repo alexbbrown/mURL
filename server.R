@@ -56,6 +56,7 @@ shinyServer(function(input, output, session) {
 			
 		} else {
 			murl$complete <<- TRUE
+			murl$downloadCount <<- isolate(murl$downloadCount)+1
 		}
 	})
 	
