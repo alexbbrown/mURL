@@ -25,21 +25,6 @@ shinyServer(function(input, output, session) {
 		)
 	)
 	
-	aURLController <- list(
-		# a single multi handle that gets updated each time
-		multiHandle = getCurlMultiHandle(),
-		# a list of data for each url fetcher
-		urls = list(
-			# prototype = list(url, handle, functions, complete)
-			),
-		control = reactiveValues(
-			active=NULL, # ! activecount==0
-			activeCount=NULL  
-			)
-	)
-	
-	
-	
 	# get a new URL and dispatch it
 	newUrlObserver <- observe({
 		# doesn't seem to be asynchronous?
