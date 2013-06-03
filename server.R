@@ -103,7 +103,7 @@ shinyServer(function(input, output, session) {
 		  url=effective.url,
 		  res=as.character(response.code),
 		  time=total.time,
-		  percent=size.download/content.length.download
+		  percent=100*size.download/content.length.download
 		)
 	})
 	

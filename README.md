@@ -5,7 +5,7 @@ mURL is an exploration of the use of cURL to enable asynchronous downloads in se
 
 By Alex B Brown
 
-RStudio's shiny can use used to build an interactive front-end to data which is fetched (by the server-side app) from other remote web-services.  Often this means the server has to download multiple documents from multiple remote web-servers for multiple users, often in response to user choices.
+RStudio's shiny can use used to build an interactive front-end to data which is fetched (by the server-side app) from other remote web-services.  Often this means the server has to download multiple documents from multiple remote web-servers for multiple users, perhaps in response to ongoing user choices.
 
 The remote web services it depends upon may not always be able to complete the transaction immediately, this can be due to : overloaded resources on the remote server, available network bandwidth in between, deliberate throttling, file-size, overhead of authentication, or in a not infrequent case, simple failure.
 
@@ -47,10 +47,12 @@ It currently features:
  * Progress monitor
  * Output based upon download completion
 
+The test case is a word-frequency analysis of "war and peace" downloaded from project gutenberg.  The analysis and plot is shown when the file is complete, and during the download a progress report is displayed.
+
 Design
 ======
 
-The following proposed design is psuedo code and leaves out error handling, debouncing etc.
+The following proposed design is pseudo code and leaves out error handling, de-bouncing etc.
 
 ````
 urlContent <- reactive(myurl = NULL)
@@ -104,7 +106,7 @@ The advantage of multi is that the multi handle can be invoked once to 'perform'
 
 multi can be used to implement single asynchronous connections, or even single synchronous ones.
 
-Since multiple handles are used, HTTP/1.1 connections are not re-used by default, although it would be possible to implement a pool.
+Since multiple handles are used, HTTP/1.1 connections are not re-used by default, although it would be possible to implement a pool.  In addition, in the current implementation cookies are inherited from the seed handle, but not shared after that.
 
 It's perfectly possible to have multiple multi handles, so there is a design decision between using the multi property purely for single asynchrony, and using a global multi handle to queue all requests on.
 
