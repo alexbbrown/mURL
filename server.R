@@ -1,26 +1,24 @@
 require(shiny)
-require(httr)
 require(RCurl)
 require(plyr)
 require(ggplot2)
+require(devtools)
+install_github("httr","alexbbrown",ref="asynch")
 
-simpleStatus <- function(mhandle) {
-	nullNa <- function(x)lapply(x,function(x)ifelse(is.null(x),NA,x))
-	
-	ldply(mhandle[[1]]@subhandles,function(x)as.data.frame(nullNa(getCurlInfo(x))))
+nullNa <- function(x)lapply(x,function(x)ifelse(is.null(x),NA,x))
+
+simpleStatus <- function(handle) {
+	ldply(list(handle),function(x)as.data.frame(nullNa(getCurlInfo(x))))
 }
 
 print.reactivevalues=function(x)print(names(x))
 
 new.fetcher <- function(url) {
 	reactiveValues(
-		complete = FALSE,
 		url = url,
-		buffer = NULL,
-		content = NULL,
-		header = NULL,
-		asyncRequestHandle = NULL,
-		contentDownloaded = 0 # an object containing the actual handle
+    deferred_httr = NULL,
+		contentDownloaded = 0,
+		content = NULL
 	)
 }
 
@@ -44,24 +42,12 @@ shinyServer(function(input, output, session) {
 		if(is.null(url)||url=="") return(NULL)
 		if(url %in% murl$fetcher$url) return(NULL)
 
+		deferred_httr <- GET_deferred(url)
+		
 		murl$fetcher$url <- url
-		# suitable for text only :-)
-		# single request (per invocation of newUrlObserver) only
-		
-		buffer <- binaryBuffer()
-		murl$fetcher$buffer <- buffer
-    writefunction <- getNativeSymbolInfo("R_curl_write_binary_data")$address
-    writedata <- buffer@ref
-		headerfunction <- (murl$fetcher$header<-basicHeaderGatherer())$update
-		
-		murl$fetcher$asyncRequestHandle = 
-		  getURLAsynchronous(url, 
-		                     write = writefunction,
-												 file=writedata,
-                         multiHandle = murl$multiHandle, 
-                         perform = FALSE,
- 												 headerFunction=headerfunction
-		  )
+		murl$fetcher$deferred_httr <- deferred_httr
+
+		push(murl$multiHandle, deferred_httr$curl)
 
  		murl$multiControl$complete <- FALSE
 	})
@@ -73,7 +59,6 @@ shinyServer(function(input, output, session) {
 		if (is.null(murl$fetcher$url)||murl$multiControl$complete == TRUE) return(NULL)
 		# do a little more work.  Can we get it to do an intermediate amount of work?
 		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
-		murl$fetcher$asyncRequestHandle <<- murl$fetcher$asyncRequestHandle
 		
 		if(status$numHandlesRemaining > 0) {
 			invalidateLater(1,session)
@@ -82,11 +67,11 @@ shinyServer(function(input, output, session) {
 		} else {
 			# all tasks are complete.  Trigger completeness tag
 			# should be more selective - trigger each as they complete.
-			completeness <- with(simpleStatus(murl$fetcher$asyncRequestHandle),size.download==content.length.download)
+			completeness <- with(simpleStatus(murl$fetcher$deferred_httr$curl),size.download==content.length.download)
 			
 			if (completeness[1]) {
 				# decode content (half-done - needs header)
-				murl$fetcher$content <- content(httr:::response(url="foo",content=as(murl$fetcher$buffer, "raw")),as="text")
+				murl$fetcher$content <- content(as="text",murl$fetcher$deferred_httr$response())					
 			} 
 			
 			murl$multiControl$complete <<- TRUE
@@ -98,8 +83,8 @@ shinyServer(function(input, output, session) {
 	# progress monitor - in the form of a progress table
 	output$transferTable = renderTable({
 		murl$multiControl$downloadCount
-		if(is.null(murl$fetcher$asyncRequestHandle)) return(NULL)
-		summarize(simpleStatus(murl$fetcher$asyncRequestHandle),
+		if(is.null(murl$fetcher$deferred_httr)) return(NULL)
+		summarize(simpleStatus(murl$fetcher$deferred_httr$curl),
 		  url=effective.url,
 		  res=as.character(response.code),
 		  time=total.time,
