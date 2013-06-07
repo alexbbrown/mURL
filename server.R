@@ -40,10 +40,12 @@ shinyServer(function(input, output, session) {
 		# doesn't seem to be asynchronous?
 		url <- isolate(input$url) # listen to action button
 		
+		print(file=stderr(),input$load_url)
+		
 		cat(file=stderr(),"adding new URL",url,"\n")
 		
+		# let's 
 		
-		input$load_url
 		if(is.null(url)||url=="") return(NULL)
 		if(url %in% murl$fetcher$url) return(NULL)
 
@@ -66,13 +68,13 @@ shinyServer(function(input, output, session) {
 	# curl handle.  It also tickles completed fetches so they can react.
 	# It currently uses a timer, but could use select in a parallel universe.
 	urlWorker <- observe({
-		cat(file=stderr(),"first look\n")
+		cat(file=stderr(),"first look [",isolate(murl$multiControl$downloadCount),"]\n")
 		
 		murl$multiControl$complete
 		
 		if (length(murl$fetchers)==0||murl$multiControl$complete == TRUE) return(NULL)
 		# do a little more work.  Can we get it to do an intermediate amount of work?
-		cat(file=stderr(),"doing some work\n")
+		cat(file=stderr(),"doing some work [",isolate(murl$multiControl$downloadCount),"]\n")
 		
 		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
 		
@@ -104,13 +106,14 @@ shinyServer(function(input, output, session) {
 		murl$multiControl$downloadCount
 		if (length(murl$fetcher)==0) return(data.frame(a="nothing"))
 		
-		firstFetcher <- murl$fetchers[[1]]
-		if(is.null(firstFetcher$deferred_httr)) return(data.frame(a="nothing"))
-		summarize(simpleStatus(firstFetcher$deferred_httr$curl),
-		  url=effective.url,
-		  res=as.character(response.code),
-		  time=total.time,
-		  percent=100*size.download/content.length.download
+		ldply(murl$fetchers,function(x) {
+			summarize(simpleStatus(x$deferred_httr$curl),
+			  url=effective.url,
+			  res=as.character(response.code),
+			  time=total.time,
+			  percent=100*size.download/content.length.download
+			)
+		}
 		)
 	})
 	
