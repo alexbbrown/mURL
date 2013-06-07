@@ -32,7 +32,11 @@ shinyServer(function(input, output, session) {
 				downloadCount = 0 # just indicates progress
 		),
 		# Should have a fetcher for each URL in flight.
-		fetchers = list()
+		fetchers = list(),
+		
+		startedCount = 0, # used to help decide to check completeness
+		lastStartedCount = 0, # used to help decide to check completeness
+		lastHandlesRemaining = 0 # used to help decide to check completeness
 	)
 	
 	# detect new url requests and dispatch
@@ -61,7 +65,7 @@ shinyServer(function(input, output, session) {
 
 		# downloadcount is used to inform any progress monitors and the urlWorker
 		murl$multiControl$downloadCount <<- isolate(murl$multiControl$downloadCount)+1
-
+		murl$startedCount <- murl$startedCount + 1;
 	})
 	
 	# URLworker is concerned with the continuing fetch work of the multi
@@ -119,7 +123,9 @@ shinyServer(function(input, output, session) {
 	
 	output$hists = renderPlot({
 		# just one for now
+		print(file=stderr(),"Trying to draw\n")
 		if (FALSE==murl$multiControl$complete) return(NULL)
+		print(file=stderr(),"Drawing\n")
 		firstFetcher <- murl$fetchers[[1]]
 		wordlengths<-function(x)ldply(table(attr(gregexpr("[A-Za-z]+",x)[[1]],"match.length")))
     print(qplot(data=wordlengths(firstFetcher$content),x=as.numeric(as.character(.id)),y=V1,geom="bar",stat="identity"))
