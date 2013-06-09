@@ -16,7 +16,7 @@ shinyUI(pageWithSidebar(
 			div(class="alert","warning: gutenberg will forbid you pretty quickly"),
 			uiOutput("transferTable")
 		),
-	mainPanel("body",
-	  plotOutput("hists",height=200)
+	mainPanel(
+		htmlOutput("results")
 	)
 ))

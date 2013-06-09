@@ -3,6 +3,7 @@ require(RCurl)
 require(plyr)
 require(ggplot2)
 require(devtools)
+dev_mode()
 #install_github("httr","alexbbrown",ref="asynch")
 require(httr)
 
@@ -146,6 +147,10 @@ shinyServer(function(input, output, session) {
 		)))
 		
 		z
+	})
+	
+	output$results = renderUI({
+	  plotOutput("hists",height=200)
 	})
 	
 	output$hists = renderPlot({
