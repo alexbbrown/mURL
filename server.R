@@ -5,6 +5,8 @@ require(ggplot2)
 require(devtools)
 dev_mode(TRUE)
 install_github("httr","alexbbrown",ref="asynch")
+install_github("httr","alexbbrown",ref="asynch")
+
 #require(httr)
 
 nullNa <- function(x)lapply(x,function(x)ifelse(is.null(x),NA,x))
