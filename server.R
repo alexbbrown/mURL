@@ -3,7 +3,7 @@ require(RCurl)
 require(plyr)
 require(ggplot2)
 require(devtools)
-dev_mode()
+dev_mode(TRUE)
 install_github("httr","alexbbrown",ref="asynch")
 require(httr)
 
