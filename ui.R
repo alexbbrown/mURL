@@ -9,12 +9,14 @@ urls <- c(
 	)
 
 shinyUI(pageWithSidebar(
-	div(
-		selectInput("url","url",choices=urls,multiple=T,selected=names(urls)[[1]]),
-		tags$a(href="#", class="action-button shiny-bound-input", id="load_url", "Load URL")),
-	div("sidebar"),
-	div("body",
-	  plotOutput("hists",height=200),
-	  uiOutput("transferTable")
+	headerPanel("demo of mURL - asynchronous URL fetching for responsive shiny"),
+	
+	sidebarPanel(selectInput("url","url",choices=urls,multiple=T,selected=names(urls)[[1]]),
+			tags$a(href="#", class="action-button shiny-bound-input", id="load_url", "Load URL"),
+			div(class="alert","warning: gutenberg will forbid you pretty quickly"),
+			uiOutput("transferTable")
+		),
+	mainPanel("body",
+	  plotOutput("hists",height=200)
 	)
 ))

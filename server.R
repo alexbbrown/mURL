@@ -127,9 +127,10 @@ shinyServer(function(input, output, session) {
 	# progress monitor - in the form of a progress table
 	output$transferTable = renderUI({
 		murl$multiControl$downloadCount
-		if (length(murl$fetchers)==0) return(div("no downloads"))
+		if (length(murl$fetchers)==0) return(div("all downloads complete"))
 		
-		z<-do.call(div,
+		z<-div(div(paste(length(murl$fetchers),"concurrent downloads")),
+			do.call(div,
 		llply(murl$fetchers,function(x) {
 			status <- simpleStatus(x$deferred_httr$curl)
 			s<-summarize(status,
@@ -138,11 +139,11 @@ shinyServer(function(input, output, session) {
 			  time=round(total.time),
 			  percent=round(100*size.download/content.length.download)
 			)
-			div(width="100%",style="background-color:gray",
+			div(width="100%",#style="background-color:gray",
 					div(style=paste0("width:",with(status,round(100*size.download/content.length.download)),"%;","background-color:teal;"),
 					status$effective.url))
 		}
-		))
+		)))
 		
 		z
 	})
