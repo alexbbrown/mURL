@@ -5,6 +5,13 @@ mURL is an exploration of the use of cURL to enable asynchronous downloads in se
 
 By Alex B Brown
 
+requires extended httr:
+
+```
+library(devtools)
+install_github("httr","alexbbrown","asynch")
+```
+
 RStudio's shiny can use used to build an interactive front-end to data which is fetched (by the server-side app) from other remote web-services.  Often this means the server has to download multiple documents from multiple remote web-servers for multiple users, perhaps in response to ongoing user choices.
 
 The remote web services it depends upon may not always be able to complete the transaction immediately, this can be due to : overloaded resources on the remote server, available network bandwidth in between, deliberate throttling, file-size, overhead of authentication, or in a not infrequent case, simple failure.
@@ -43,7 +50,7 @@ The current design is a result of a conflict between the (unsatisfied) needs of 
 
 It currently features:
 
- * Single asynchronous download
+ * multiple asynchronous download
  * Progress monitor
  * Output based upon download completion
 

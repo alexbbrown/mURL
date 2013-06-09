@@ -3,11 +3,15 @@ require(RCurl)
 require(plyr)
 require(ggplot2)
 require(devtools)
-dev_mode(TRUE)
-install_github("httr","alexbbrown",ref="asynch")
+#install_github("httr","alexbbrown",ref="asynch")
 require(httr)
 
-nullNa <- function(x)lapply(x,function(x)ifelse(is.null(x),NA,x))
+nullNa <- function(x)lapply(x,function(x){
+  if (length(x)==0) return(NA)
+  if (length(x)>1) return(paste(x,collapse=", "))
+  if (is.null(x)) return(NA)
+  x
+})
 
 simpleStatus <- function(handle) {
 	ldply(list(handle),function(x)as.data.frame(nullNa(getCurlInfo(x))))
@@ -20,7 +24,8 @@ new.fetcher <- function(url) {
 		url = url,
     deferred_httr = NULL,
 		contentDownloaded = 0,
-		content = NULL
+		content = NULL,
+    uid = tempfile("","")
 	)
 }
 
@@ -28,17 +33,21 @@ shinyServer(function(input, output, session) {
 	
 	downloads <- list()
 	
+  # what outputs have we already created?
+  output_names <- character(0)
+  
 	murl <- list(
 		multiHandle = getCurlMultiHandle(),
 		multiControl = reactiveValues(
 				complete = FALSE, # should probably be 2 to start
-				downloadCount = 0 # just indicates progress
+				progressCount = 0, # just indicates progress
+				startedCount = 0, # used to help decide to check completeness
+        completedCount = 0
 		),
 		# Should have a fetcher for each URL in flight.
 		fetchers = list(),
 		completed = list(),
 		
-		startedCount = 0, # used to help decide to check completeness
 		lastStartedCount = 0, # used to help decide to check completeness
 		lastHandlesRemaining = 0 # used to help decide to check completeness
 	)
@@ -56,9 +65,10 @@ shinyServer(function(input, output, session) {
 		
  		murl$multiControl$complete <- FALSE
 
-		# downloadcount is used to inform any progress monitors and the urlWorker
-		murl$multiControl$downloadCount <<- isolate(murl$multiControl$downloadCount)+1
-		murl$startedCount <- murl$startedCount + 1;
+		# progressCount is used to inform any progress monitors and the urlWorker
+		murl$multiControl$progressCount <<- isolate(murl$multiControl$progressCount) + 1
+    # startedCount can be used to update reactives
+		murl$multiControl$startedCount <- isolate(murl$multiControl$startedCount) + 1
 		
 		new_fetcher
 	}
@@ -67,50 +77,56 @@ shinyServer(function(input, output, session) {
 	newUrlObserver <- observe({
 		# doesn't seem to be asynchronous?
 		input$load_url # watch the action
-		url <- isolate(input$url) # listen to action button
+		urls <- isolate(input$url) # listen to action button
 				
-		cat(file=stderr(),"adding new URL",url,"\n")
 		
-		if(is.null(url)||url=="") return(NULL)
-		if(url %in% murl$fetcher$url) return(NULL)
-
-		new_download <- queue_download(url)
+		if(length(urls)==0||is.null(urls)||urls=="") return(NULL)
+    lapply(urls,function(url) {
+	  	cat(file=stderr(),"adding new URL",url,"\n")
+  		#if(url %in% murl$fetcher$url) return(NULL)
+    
+  		new_download <- queue_download(url)
 		
-		downloads <<- c(list(new_download),downloads)
+  		downloads <<- c(list(new_download),downloads)
+    })
 	})
 	
 	# URLworker is concerned with the continuing fetch work of the multi
 	# curl handle.  It also tickles completed fetches so they can react.
 	# It currently uses a timer, but could use select in a parallel universe.
 	urlWorker <- observe({
-	#	cat(file=stderr(),"first look [",isolate(murl$multiControl$downloadCount),"]\n")
+	#	cat(file=stderr(),"first look [",isolate(murl$multiControl$progressCount),"]\n")
 		
-		murl$multiControl$complete
+		murl$multiControl$complete # start trigger
 		
-		if (length(murl$fetchers)==0||murl$multiControl$complete == TRUE) return(NULL)
+		if (murl$multiControl$complete == TRUE||length(murl$fetchers)==0) return(NULL)
 		# do a little more work.  Can we get it to do an intermediate amount of work?
-	#	cat(file=stderr(),"doing some work [",isolate(murl$multiControl$downloadCount),"]\n")
+	#	cat(file=stderr(),"doing some work [",isolate(murl$multiControl$progressCount),"]\n")
 		
 		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
 
 		if (status$numHandlesRemaining != murl$lastHandlesRemaining ||
-			  murl$startedCount != murl$lastStartedCount) {
+			  murl$multiControl$startedCount != murl$lastStartedCount) {
 				
 			murl$fetchers <<- Filter(function(fetcher){
 				complete <- with(simpleStatus(isolate(fetcher$deferred_httr$curl)),size.download==content.length.download)
 			
 				if (complete) {
+          cat(file=stderr(),"completed download of a url\n")
+ 
 					# decode content when complete.  this triggers the next step (consumer)
 					fetcher$content <- content(as="text",isolate(fetcher$deferred_httr$response()))
 					pop(murl$multiHandle, isolate(fetcher$deferred_httr$curl))
-					murl$completed <- c(murl$completed, list(fetcher)) # should convert to non-reactive here
+					murl$multiControl$completedCount <- isolate(murl$multiControl$completedCount) + 1
+				
+					murl$completed <<- c(murl$completed, list(fetcher)) # should convert to non-reactive here
 				}
 				return(!all(complete))
 			},murl$fetchers)
 		}
 		
 		murl$lastHandlesRemaining <<- status$numHandlesRemaining
-		murl$lastStartedCount <<- murl$startedCount
+		murl$lastStartedCount <<- isolate(murl$multiControl$startedCount)
 		
 		if (status$numHandlesRemaining > 0) {
 			invalidateLater(1,session)
@@ -121,13 +137,13 @@ shinyServer(function(input, output, session) {
 			# should be more selective - trigger each as they complete.			
 			murl$multiControl$complete <<- TRUE
 		}
-		# downloadcount is used to inform any progress monitors
-		murl$multiControl$downloadCount <<- isolate(murl$multiControl$downloadCount)+1
+		# progressCount is used to inform any progress monitors
+		murl$multiControl$progressCount <<- isolate(murl$multiControl$progressCount)+1
 	})
 	
 	# progress monitor - in the form of a progress table
 	output$transferTable = renderUI({
-		murl$multiControl$downloadCount
+		murl$multiControl$progressCount
 		if (length(murl$fetchers)==0) return(div("all downloads complete"))
 		
 		z<-div(div(paste(length(murl$fetchers),"concurrent downloads")),
@@ -150,16 +166,23 @@ shinyServer(function(input, output, session) {
 	})
 	
 	output$results = renderUI({
-	  plotOutput("hists",height=200)
+	  if(murl$multiControl$completedCount == 0) return(div("Waiting..."))
+    
+    cat(file=stderr(),"updating number of outputs\n")
+    
+    do.call(div,lapply(murl$completed,function(fetcher) {
+      if (!fetcher$uid %in% output_names) {
+        output[[fetcher$uid]] <- renderPlot({
+          print(file=stderr(),"Trying to draw\n")
+          firstFetcher <- fetcher
+          output_names <<- c(output_names,fetcher$uid)
+          wordlengths<-function(x)ldply(table(attr(gregexpr("[A-Za-z]+",x)[[1]],"match.length")))
+          print(qplot(data=wordlengths(firstFetcher$content),x=as.numeric(as.character(.id)),y=V1,geom="bar",stat="identity")+labs(title=sub(".*/","",fetcher$url),y="count",x="word length"))
+        }) 
+      }   
+      div(id=fetcher$uid,class="shiny-plot-output",style="display:inline-block;width:150px;height:150px")
+
+    }))
 	})
 	
-	output$hists = renderPlot({
-		# just one for now
-		print(file=stderr(),"Trying to draw\n")
-		if (FALSE==murl$multiControl$complete) return(NULL)
-		print(file=stderr(),"Drawing\n")
-		firstFetcher <- downloads[[1]]
-		wordlengths<-function(x)ldply(table(attr(gregexpr("[A-Za-z]+",x)[[1]],"match.length")))
-    print(qplot(data=wordlengths(firstFetcher$content),x=as.numeric(as.character(.id)),y=V1,geom="bar",stat="identity"))
-	})
 })

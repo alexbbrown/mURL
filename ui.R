@@ -1,6 +1,8 @@
 require(shiny)
 
 urls <- c(
+  `R Language definition` = "http://stat.ethz.ch/R-manual/R-devel/doc/manual/R-lang.html",
+  `The Jargon file` = "http://www.catb.org/jargon/html/",
 	`War and peace` = "http://www.gutenberg.org/cache/epub/2600/pg2600.txt",
 	`Huckleberry finn` = "http://www.gutenberg.org/cache/epub/76/pg76.txt",
 	`Beowulf` = "http://www.gutenberg.org/cache/epub/16328/pg16328.txt",
