@@ -1,7 +1,11 @@
 require(shiny)
 
 urls <- c(
-	war_and_peace = "http://www.gutenberg.org/files/2600/2600-h/2600-h.htm"
+	`War and peace` = "http://www.gutenberg.org/cache/epub/2600/pg2600.txt",
+	`Huckleberry finn` = "http://www.gutenberg.org/cache/epub/76/pg76.txt",
+	`Beowulf` = "http://www.gutenberg.org/cache/epub/16328/pg16328.txt",
+	`Ulysses` = "http://www.gutenberg.org/cache/epub/4300/pg4300.txt",
+	`Grimm's Fairy Tales` = "http://www.gutenberg.org/cache/epub/2591/pg2591.txt"
 	)
 
 shinyUI(pageWithSidebar(
@@ -10,7 +14,7 @@ shinyUI(pageWithSidebar(
 		tags$a(href="#", class="action-button shiny-bound-input", id="load_url", "Load URL")),
 	div("sidebar"),
 	div("body",
-	  tableOutput("transferTable"),
-	  plotOutput("hists",height=200)
+	  plotOutput("hists",height=200),
+	  uiOutput("transferTable")
 	)
 ))
