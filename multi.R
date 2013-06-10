@@ -2,16 +2,18 @@
 # curl handle.  It also tickles completed fetches so they can react.
 # It currently uses a timer, but could use select in a parallel universe.
 makeUrlWorker <- function(murl,session)observe({
-#	cat(file=stderr(),"first look [",isolate(murl$progressCount),"]\n")
 	
 	murl$complete # start trigger
 	
 	if (murl$complete == TRUE||length(murl$fetchers)==0) return(NULL)
-	# do a little more work.  Can we get it to do an intermediate amount of work?
-#	cat(file=stderr(),"doing some work [",isolate(murl$progressCount),"]\n")
 	
+	# do one more unit of work.  Can we get it to do an intermediate amount of work?
+	# may want to globally adjust buffer sizes
 	status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
 
+  # scan for completed handles.  Ideally should rely on curl multi info api
+  # but it's not currently exposed through rcurl.  instead check that download size
+  # equals content size
 	if (status$numHandlesRemaining != isolate(murl$lastHandlesRemaining) ||
 	  murl$startedCount != murl$lastStartedCount) {
 			
@@ -24,9 +26,8 @@ makeUrlWorker <- function(murl,session)observe({
 				# decode content when complete.  this triggers the next step (consumer)
 				fetcher$content <- content(as="text",isolate(fetcher$deferred_httr$response()))
 				pop(murl$multiHandle, isolate(fetcher$deferred_httr$curl))
-				murl$completedCount <- isolate(murl$completedCount) + 1
 			
-				murl$completed <<- c(murl$completed, list(fetcher)) # should convert to non-reactive here
+				murl$completed <<- c(murl$completed, list(fetcher))
 			}
 			return(!all(complete))
 		},murl$fetchers)
@@ -55,7 +56,6 @@ new_multi_controller <- function(session){
 		complete = FALSE, # should probably be 2 to start
 		progressCount = 0, # just indicates progress
 		startedCount = 0, # used to help decide to check completeness
-	    completedCount = 0,
 		fetchers = list(),
 		completed = list(),
 		downloads = list(),
