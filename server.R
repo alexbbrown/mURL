@@ -11,58 +11,53 @@ source("multi.R")
 print.reactivevalues=function(x)print(names(x))
 
 shinyServer(function(input, output, session) {
-		
-  # what outputs have we already created?
-  output_names <- character(0)
   
 	murl <- new_multi_controller(session);
 	
 	# detect new url requests and dispatch
 	newUrlObserver <- observe({
-		# doesn't seem to be asynchronous?
-		input$load_url # watch the action
-		urls <- isolate(input$url) # listen to action button
-				
+		
+		input$load_url # listen to action button
+		urls <- isolate(input$url) 	# get list to download. doesn't check for already downloaded
 		
 		if(length(urls)==0||is.null(urls)||urls=="") return(NULL)
     lapply(urls,function(url) {
 	  	cat(file=stderr(),"adding new URL",url,"\n")
-  		#if(url %in% murl$fetcher$url) return(NULL)
     
   		new_download <- queue_download(url,murl)
-		
-
     })
 	})
 	
-	# progress monitor - in the form of a progress table
+	# multi progress monitor - in the form of a progress table
+	# not required but interesting.
 	output$transferTable = renderUI({
 		murl$progressCount
 		if (length(murl$fetchers)==0) return(div("all downloads complete"))
 		
-		z<-div(div(paste(length(murl$fetchers),"concurrent downloads")),
+		div(
+			div(paste(length(murl$fetchers),"concurrent downloads")),
 			do.call(div,
-		llply(murl$fetchers,function(x) {
-			status <- simpleStatus(x$deferred_httr$curl)
-			s<-summarize(status,
-			  url=effective.url,
-			  res=as.character(response.code),
-			  time=round(total.time),
-			  percent=round(100*size.download/content.length.download)
+				llply(murl$fetchers,function(x) {
+					status <- simpleStatus(x$deferred_httr$curl)
+					s<-summarize(status,
+					  url=effective.url,
+					  res=as.character(response.code),
+					  time=round(total.time),
+					  percent=round(100*size.download/content.length.download)
+					)
+					div(width="100%",height="1em",
+							div(style=paste0("width:",with(status,round(100*size.download/content.length.download)),"%;","background-color:teal;overflow:hidden;heignt:1em"),
+							status$effective.url))
+				})
 			)
-			div(width="100%",#style="background-color:gray",
-					div(style=paste0("width:",with(status,round(100*size.download/content.length.download)),"%;","background-color:teal;"),
-					status$effective.url))
-		}
-		)))
-		
-		z
+		)
 	})
 	
-	output$results = renderUI({
-	  if(murl$completedCount == 0) return(div("Waiting..."))
-    
-    cat(file=stderr(),"updating number of outputs\n")
+	 # what outputs have we already created?
+  output_names <- character(0)
+
+	output$results = renderUI({    
+    cat(file=stderr(),"generating an output for each download\n")
     
     do.call(div,lapply(murl$completed,function(fetcher) {
       if (!fetcher$uid %in% output_names) {
