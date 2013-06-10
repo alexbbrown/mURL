@@ -4,9 +4,8 @@ require(plyr)
 require(ggplot2)
 require(devtools)
 #install_github("httr","alexbbrown",ref="asynch")
+require(mURL)
 require(httr)
-
-source("multi.R")
 
 print.reactivevalues=function(x)print(names(x))
 
