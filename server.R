@@ -6,72 +6,16 @@ require(devtools)
 #install_github("httr","alexbbrown",ref="asynch")
 require(httr)
 
-nullNa <- function(x)lapply(x,function(x){
-  if (length(x)==0) return(NA)
-  if (length(x)>1) return(paste(x,collapse=", "))
-  if (is.null(x)) return(NA)
-  x
-})
-
-simpleStatus <- function(handle) {
-	ldply(list(handle),function(x)as.data.frame(nullNa(getCurlInfo(x))))
-}
+source("multi.R")
 
 print.reactivevalues=function(x)print(names(x))
 
-new.fetcher <- function(url) {
-	reactiveValues(
-		url = url,
-    deferred_httr = NULL,
-		contentDownloaded = 0,
-		content = NULL,
-    uid = tempfile("","")
-	)
-}
-
 shinyServer(function(input, output, session) {
-	
-	downloads <- list()
-	
+		
   # what outputs have we already created?
   output_names <- character(0)
   
-	murl <- list(
-		multiHandle = getCurlMultiHandle(),
-		multiControl = reactiveValues(
-				complete = FALSE, # should probably be 2 to start
-				progressCount = 0, # just indicates progress
-				startedCount = 0, # used to help decide to check completeness
-        completedCount = 0
-		),
-		# Should have a fetcher for each URL in flight.
-		fetchers = list(),
-		completed = list(),
-		
-		lastStartedCount = 0, # used to help decide to check completeness
-		lastHandlesRemaining = 0 # used to help decide to check completeness
-	)
-	
-	queue_download <- function(url) {
-		deferred_httr <- GET_deferred(url)
-		new_fetcher <- new.fetcher(url)
-		new_fetcher$deferred_httr <- deferred_httr
-
-		push(murl$multiHandle, deferred_httr$curl)
-
-		murl$fetchers <<- c(murl$fetchers,list(new_fetcher))
-		
-		cat(file=stderr(),"count",length(murl$fetchers),"\n")
-		
- 		murl$multiControl$complete <- FALSE
-
-		# progressCount is used to inform any progress monitors and the urlWorker
-		murl$multiControl$progressCount <<- isolate(murl$multiControl$progressCount) + 1
-    # startedCount can be used to update reactives
-		murl$multiControl$startedCount <- isolate(murl$multiControl$startedCount) + 1
-		
-		new_fetcher
-	}
+	murl <- new_multi_controller();
 	
 	# detect new url requests and dispatch
 	newUrlObserver <- observe({
@@ -85,9 +29,9 @@ shinyServer(function(input, output, session) {
 	  	cat(file=stderr(),"adding new URL",url,"\n")
   		#if(url %in% murl$fetcher$url) return(NULL)
     
-  		new_download <- queue_download(url)
+  		new_download <- queue_download(url,murl)
 		
-  		downloads <<- c(list(new_download),downloads)
+
     })
 	})
 	
@@ -99,7 +43,7 @@ shinyServer(function(input, output, session) {
 		
 		murl$multiControl$complete # start trigger
 		
-		if (murl$multiControl$complete == TRUE||length(murl$fetchers)==0) return(NULL)
+		if (murl$multiControl$complete == TRUE||length(murl$multiControl$fetchers)==0) return(NULL)
 		# do a little more work.  Can we get it to do an intermediate amount of work?
 	#	cat(file=stderr(),"doing some work [",isolate(murl$multiControl$progressCount),"]\n")
 		
@@ -108,7 +52,7 @@ shinyServer(function(input, output, session) {
 		if (status$numHandlesRemaining != murl$lastHandlesRemaining ||
 			  murl$multiControl$startedCount != murl$lastStartedCount) {
 				
-			murl$fetchers <<- Filter(function(fetcher){
+			murl$multiControl$fetchers <<- Filter(function(fetcher){
 				complete <- with(simpleStatus(isolate(fetcher$deferred_httr$curl)),size.download==content.length.download)
 			
 				if (complete) {
@@ -122,7 +66,7 @@ shinyServer(function(input, output, session) {
 					murl$completed <<- c(murl$completed, list(fetcher)) # should convert to non-reactive here
 				}
 				return(!all(complete))
-			},murl$fetchers)
+			},murl$multiControl$fetchers)
 		}
 		
 		murl$lastHandlesRemaining <<- status$numHandlesRemaining
@@ -144,11 +88,11 @@ shinyServer(function(input, output, session) {
 	# progress monitor - in the form of a progress table
 	output$transferTable = renderUI({
 		murl$multiControl$progressCount
-		if (length(murl$fetchers)==0) return(div("all downloads complete"))
+		if (length(murl$multiControl$fetchers)==0) return(div("all downloads complete"))
 		
-		z<-div(div(paste(length(murl$fetchers),"concurrent downloads")),
+		z<-div(div(paste(length(murl$multiControl$fetchers),"concurrent downloads")),
 			do.call(div,
-		llply(murl$fetchers,function(x) {
+		llply(murl$multiControl$fetchers,function(x) {
 			status <- simpleStatus(x$deferred_httr$curl)
 			s<-summarize(status,
 			  url=effective.url,
