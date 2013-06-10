@@ -15,7 +15,7 @@ shinyServer(function(input, output, session) {
   # what outputs have we already created?
   output_names <- character(0)
   
-	murl <- new_multi_controller();
+	murl <- new_multi_controller(session);
 	
 	# detect new url requests and dispatch
 	newUrlObserver <- observe({
@@ -35,64 +35,14 @@ shinyServer(function(input, output, session) {
     })
 	})
 	
-	# URLworker is concerned with the continuing fetch work of the multi
-	# curl handle.  It also tickles completed fetches so they can react.
-	# It currently uses a timer, but could use select in a parallel universe.
-	urlWorker <- observe({
-	#	cat(file=stderr(),"first look [",isolate(murl$multiControl$progressCount),"]\n")
-		
-		murl$multiControl$complete # start trigger
-		
-		if (murl$multiControl$complete == TRUE||length(murl$multiControl$fetchers)==0) return(NULL)
-		# do a little more work.  Can we get it to do an intermediate amount of work?
-	#	cat(file=stderr(),"doing some work [",isolate(murl$multiControl$progressCount),"]\n")
-		
-		status <- curlMultiPerform(murl$multiHandle, multiple = FALSE)
-
-		if (status$numHandlesRemaining != murl$lastHandlesRemaining ||
-			  murl$multiControl$startedCount != murl$lastStartedCount) {
-				
-			murl$multiControl$fetchers <<- Filter(function(fetcher){
-				complete <- with(simpleStatus(isolate(fetcher$deferred_httr$curl)),size.download==content.length.download)
-			
-				if (complete) {
-          cat(file=stderr(),"completed download of a url\n")
- 
-					# decode content when complete.  this triggers the next step (consumer)
-					fetcher$content <- content(as="text",isolate(fetcher$deferred_httr$response()))
-					pop(murl$multiHandle, isolate(fetcher$deferred_httr$curl))
-					murl$multiControl$completedCount <- isolate(murl$multiControl$completedCount) + 1
-				
-					murl$completed <<- c(murl$completed, list(fetcher)) # should convert to non-reactive here
-				}
-				return(!all(complete))
-			},murl$multiControl$fetchers)
-		}
-		
-		murl$lastHandlesRemaining <<- status$numHandlesRemaining
-		murl$lastStartedCount <<- isolate(murl$multiControl$startedCount)
-		
-		if (status$numHandlesRemaining > 0) {
-			invalidateLater(1,session)
-			# libcurl knows when curlhandles are complete, but that property is not exported
-			# this code uses the contentlength to detect completeness
-		} else {
-			# all tasks are complete.  Trigger completeness tag
-			# should be more selective - trigger each as they complete.			
-			murl$multiControl$complete <<- TRUE
-		}
-		# progressCount is used to inform any progress monitors
-		murl$multiControl$progressCount <<- isolate(murl$multiControl$progressCount)+1
-	})
-	
 	# progress monitor - in the form of a progress table
 	output$transferTable = renderUI({
-		murl$multiControl$progressCount
-		if (length(murl$multiControl$fetchers)==0) return(div("all downloads complete"))
+		murl$progressCount
+		if (length(murl$fetchers)==0) return(div("all downloads complete"))
 		
-		z<-div(div(paste(length(murl$multiControl$fetchers),"concurrent downloads")),
+		z<-div(div(paste(length(murl$fetchers),"concurrent downloads")),
 			do.call(div,
-		llply(murl$multiControl$fetchers,function(x) {
+		llply(murl$fetchers,function(x) {
 			status <- simpleStatus(x$deferred_httr$curl)
 			s<-summarize(status,
 			  url=effective.url,
@@ -110,7 +60,7 @@ shinyServer(function(input, output, session) {
 	})
 	
 	output$results = renderUI({
-	  if(murl$multiControl$completedCount == 0) return(div("Waiting..."))
+	  if(murl$completedCount == 0) return(div("Waiting..."))
     
     cat(file=stderr(),"updating number of outputs\n")
     
